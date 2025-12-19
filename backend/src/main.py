@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI
+from src.api.v1.auth import router as auth_router
 from src.api.v1.markets import router as markets_router
 from src.core.config import settings
 from src.services.ai_service import run_market_generation_job
@@ -49,6 +50,7 @@ app = FastAPI(
 )
 
 # Include API routers
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(markets_router, prefix="/api/v1")
 
 

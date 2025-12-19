@@ -35,7 +35,6 @@ class MarketResponse(BaseModel):
 class BuyRequest(BaseModel):
     """Request schema for buying shares."""
 
-    user_id: int
     amount: float = Field(..., gt=0)
     outcome: bool  # True = YES, False = NO
 

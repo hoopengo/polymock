@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     # OpenRouter API key for AI service (optional)
     OPENROUTER_API_KEY: str = ""
 
+    # JWT Settings
+    SECRET_KEY: str = "your-secret-key-change-in-production"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ALGORITHM: str = "HS256"
+
     @property
     def DATABASE_URL(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

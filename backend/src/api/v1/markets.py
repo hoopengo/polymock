@@ -1,7 +1,11 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.api.deps import get_current_user
 from src.db.session import get_db
 from src.models.market import Market
+from src.models.user import User
 from src.schemas.market import (
     BuyRequest,
     BuyResponse,
@@ -101,10 +105,11 @@ async def create_market(
 async def buy_shares(
     market_id: int,
     buy_request: BuyRequest,
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BuyResponse:
     """
-    Buy shares in a market.
+    Buy shares in a market (requires authentication).
 
     Uses simplified parimutuel/CPMM formula:
     - Effective_Price = Pool_Counter / (Pool_Target + Pool_Counter + Amount)
@@ -116,7 +121,7 @@ async def buy_shares(
 
     try:
         trade_result = await service.buy_shares(
-            user_id=buy_request.user_id,
+            user_id=current_user.id,
             market_id=market_id,
             outcome=buy_request.outcome,
             amount=buy_request.amount,
