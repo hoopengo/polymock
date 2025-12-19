@@ -1,3 +1,4 @@
+import { useAuthStore } from "@/stores/authStore";
 import axios from "axios";
 
 // ============================================================
@@ -10,6 +11,36 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+// ============================================================
+// Request Interceptor - Inject Auth Token
+// ============================================================
+
+api.interceptors.request.use(
+  (config) => {
+    const token = useAuthStore.getState().token;
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// ============================================================
+// Response Interceptor - Handle 401 Unauthorized
+// ============================================================
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid - logout user
+      useAuthStore.getState().logout();
+    }
+    return Promise.reject(error);
+  }
+);
 
 // ============================================================
 // Types
@@ -57,8 +88,59 @@ export interface BuyResponse {
   new_prob_no: number;
 }
 
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
 // ============================================================
-// API Functions
+// Auth API Functions
+// ============================================================
+
+/**
+ * Login with username and password.
+ * Uses OAuth2 password flow (application/x-www-form-urlencoded format)
+ */
+export async function login(
+  username: string,
+  password: string
+): Promise<TokenResponse> {
+  const formData = new URLSearchParams();
+  formData.append("username", username);
+  formData.append("password", password);
+
+  const { data } = await api.post<TokenResponse>("/auth/token", formData, {
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+  });
+  return data;
+}
+
+/**
+ * Register a new user
+ */
+export async function register(
+  username: string,
+  password: string
+): Promise<User> {
+  const { data } = await api.post<User>("/auth/register", {
+    username,
+    password,
+  });
+  return data;
+}
+
+/**
+ * Fetch current authenticated user info
+ */
+export async function fetchCurrentUser(): Promise<User> {
+  const { data } = await api.get<User>("/auth/me");
+  return data;
+}
+
+// ============================================================
+// Market API Functions
 // ============================================================
 
 /**

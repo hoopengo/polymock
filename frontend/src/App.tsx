@@ -11,8 +11,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { buyShares, fetchMarkets, type BuyRequest, type Market } from "@/lib/api";
+import AuthPage from "@/pages/AuthPage";
+import { useAuthStore } from "@/stores/authStore";
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 // ============================================================
 // Query Client
@@ -28,6 +31,20 @@ const queryClient = new QueryClient({
 });
 
 // ============================================================
+// Protected Route Component
+// ============================================================
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
+  if (!isAuthenticated) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+// ============================================================
 // Buy Dialog Component
 // ============================================================
 
@@ -41,6 +58,7 @@ interface BuyDialogProps {
 function BuyDialog({ market, outcome, open, onOpenChange }: BuyDialogProps) {
   const [amount, setAmount] = useState("");
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
 
   const mutation = useMutation({
     mutationFn: (request: { marketId: number; data: BuyRequest }) =>
@@ -54,7 +72,7 @@ function BuyDialog({ market, outcome, open, onOpenChange }: BuyDialogProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!market || !amount) return;
+    if (!market || !amount || !user) return;
 
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) return;
@@ -62,7 +80,7 @@ function BuyDialog({ market, outcome, open, onOpenChange }: BuyDialogProps) {
     mutation.mutate({
       marketId: market.id,
       data: {
-        user_id: 1, // Hardcoded for demo; replace with actual user context
+        user_id: user.id,
         amount: numAmount,
         outcome,
       },
@@ -231,49 +249,85 @@ function MarketsGrid() {
 }
 
 // ============================================================
-// App Component
+// Dashboard Layout
+// ============================================================
+
+function DashboardLayout() {
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">📈</span>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              PolyMOCK
+            </h1>
+          </div>
+          <nav className="flex items-center gap-4">
+            {user && (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  Welcome, <span className="font-medium text-foreground">{user.username}</span>
+                </span>
+                <span className="text-sm font-medium text-emerald-500">
+                  ${user.balance.toFixed(2)}
+                </span>
+                <Button variant="outline" size="sm" onClick={logout}>
+                  Sign Out
+                </Button>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h2 className="text-3xl font-bold tracking-tight">Markets</h2>
+          <p className="text-muted-foreground mt-2">
+            Trade on the outcomes of real-world events
+          </p>
+        </div>
+
+        <MarketsGrid />
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border/50 py-8 mt-auto">
+        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+          <p>© 2024 PolyMOCK. Prediction Market Demo.</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+// ============================================================
+// App Component with Router
 // ============================================================
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-background">
-        {/* Header */}
-        <header className="border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-          <div className="container mx-auto flex h-16 items-center justify-between px-4">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">📈</span>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                PolyMOCK
-              </h1>
-            </div>
-            <nav className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">
-                Prediction Market
-              </span>
-            </nav>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="container mx-auto px-4 py-8">
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold tracking-tight">Markets</h2>
-            <p className="text-muted-foreground mt-2">
-              Trade on the outcomes of real-world events
-            </p>
-          </div>
-
-          <MarketsGrid />
-        </main>
-
-        {/* Footer */}
-        <footer className="border-t border-border/50 py-8 mt-auto">
-          <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-            <p>© 2024 PolyMOCK. Prediction Market Demo.</p>
-          </div>
-        </footer>
-      </div>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/auth" element={<AuthPage />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }
