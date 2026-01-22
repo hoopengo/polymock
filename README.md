@@ -17,7 +17,6 @@ PolyMOCK — это полнофункциональное приложение 
 - **База данных**: PostgreSQL
 - **ORM**: SQLAlchemy (Async)
 - **Миграции**: Alembic
-- **ИИ**: Интеграция OpenAI / OpenRouter
 - **Аутентификация**: PyJWT, Passlib
 
 ### Фронтенд

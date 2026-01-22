@@ -36,3 +36,4 @@ pnpm-workspace.lock
 # etc
 .DS_Store
 .trae/
+.pytest_cache/
