@@ -91,12 +91,18 @@ async def create_market(
     The market will be initialized with equal liquidity in both YES and NO pools.
     """
     service = MarketService(db)
-    market = await service.create_market(
-        question=market_data.question,
-        description=market_data.description,
-        end_date=market_data.end_date,
-        initial_pool=market_data.initial_pool,
-    )
+    try:
+        market = await service.create_market(
+            question=market_data.question,
+            description=market_data.description,
+            end_date=market_data.end_date,
+            initial_pool=market_data.initial_pool,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
 
     return _market_to_response(market, service)
 

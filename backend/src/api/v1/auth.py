@@ -5,11 +5,18 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.api.deps import get_current_user
 from src.core.config import settings
 from src.core.security import create_access_token, get_password_hash, verify_password
 from src.db.session import get_db
 from src.models.user import User
-from src.schemas.auth import Token, UserCreate, UserResponse
+from src.schemas.auth import (
+    PasswordChange,
+    ProfileUpdate,
+    Token,
+    UserCreate,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -87,3 +94,64 @@ async def login(
     )
 
     return Token(access_token=access_token)
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> UserResponse:
+    """
+    Get current authenticated user info.
+
+    Returns user data including admin status.
+    """
+    return UserResponse.model_validate(current_user)
+
+
+@router.patch("/profile", response_model=UserResponse)
+async def update_profile(
+    profile_data: ProfileUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UserResponse:
+    """
+    Update user profile settings.
+
+    Allows updating avatar URL, theme, and notification preferences.
+    """
+    update_data = profile_data.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(current_user, field, value)
+
+    await db.commit()
+    await db.refresh(current_user)
+
+    return UserResponse.model_validate(current_user)
+
+
+@router.post("/change-password")
+async def change_password(
+    password_data: PasswordChange,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str]:
+    """
+    Change user password.
+
+    Requires the current password for verification.
+    """
+    # Verify current password
+    if not current_user.hashed_password or not verify_password(
+        password_data.current_password, current_user.hashed_password
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    # Update to new password
+    current_user.hashed_password = get_password_hash(password_data.new_password)
+    await db.commit()
+
+    return {"message": "Password changed successfully"}

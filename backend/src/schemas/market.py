@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class MarketCreate(BaseModel):
@@ -10,6 +10,15 @@ class MarketCreate(BaseModel):
     description: str
     end_date: datetime
     initial_pool: float = Field(default=100.0, gt=0)
+
+    @field_validator("end_date", mode="before")
+    @classmethod
+    def normalize_end_date(cls, v: datetime) -> datetime:
+        """Convert timezone-aware datetime to naive UTC datetime."""
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            # Convert to UTC and strip timezone info
+            return v.astimezone(timezone.utc).replace(tzinfo=None)
+        return v
 
 
 class MarketResponse(BaseModel):

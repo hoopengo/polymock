@@ -8,6 +8,10 @@ export interface User {
   id: number;
   username: string;
   balance: number;
+  is_admin: boolean;
+  avatar_url: string | null;
+  theme: "dark" | "light";
+  email_notifications: boolean;
 }
 
 interface AuthState {

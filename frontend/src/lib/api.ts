@@ -6,7 +6,7 @@ import axios from "axios";
 // ============================================================
 
 const api = axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: "/api/v1",
   headers: {
     "Content-Type": "application/json",
   },
@@ -69,6 +69,10 @@ export interface User {
   id: number;
   username: string;
   balance: number;
+  is_admin: boolean;
+  avatar_url: string | null;
+  theme: "dark" | "light";
+  email_notifications: boolean;
 }
 
 export interface BuyRequest {
@@ -140,6 +144,36 @@ export async function fetchCurrentUser(): Promise<User> {
 }
 
 // ============================================================
+// Profile API Functions
+// ============================================================
+
+export interface ProfileUpdate {
+  avatar_url?: string | null;
+  theme?: "dark" | "light";
+  email_notifications?: boolean;
+}
+
+export interface PasswordChange {
+  current_password: string;
+  new_password: string;
+}
+
+/**
+ * Update user profile
+ */
+export async function updateProfile(data: ProfileUpdate): Promise<User> {
+  const { data: user } = await api.patch<User>("/auth/profile", data);
+  return user;
+}
+
+/**
+ * Change user password
+ */
+export async function changePassword(data: PasswordChange): Promise<void> {
+  await api.post("/auth/change-password", data);
+}
+
+// ============================================================
 // Market API Functions
 // ============================================================
 
@@ -163,6 +197,225 @@ export async function buyShares(
     request
   );
   return data;
+}
+
+// ============================================================
+// Admin API Functions
+// ============================================================
+
+export interface UserUpdate {
+  balance?: number;
+  is_admin?: boolean;
+}
+
+export interface MarketCreate {
+  question: string;
+  description: string;
+  end_date: string;
+  initial_pool?: number;
+}
+
+export interface MarketUpdate {
+  question?: string;
+  description?: string;
+  end_date?: string;
+  resolution_source?: string;
+}
+
+export interface MarketResolve {
+  outcome: boolean;
+  resolution_source?: string;
+}
+
+/**
+ * Fetch all users (admin only)
+ */
+export async function fetchUsers(): Promise<{ users: User[]; total: number }> {
+  const { data } = await api.get<{ users: User[]; total: number }>("/admin/users");
+  return data;
+}
+
+/**
+ * Update a user (admin only)
+ */
+export async function updateUser(userId: number, userData: UserUpdate): Promise<User> {
+  const { data } = await api.patch<User>(`/admin/users/${userId}`, userData);
+  return data;
+}
+
+/**
+ * Fetch all markets including resolved (admin only)
+ */
+export async function fetchAllMarkets(): Promise<Market[]> {
+  const { data } = await api.get<Market[]>("/admin/markets");
+  return data;
+}
+
+/**
+ * Create a market (admin only)
+ */
+export async function createMarket(marketData: MarketCreate): Promise<Market> {
+  const { data } = await api.post<Market>("/admin/markets", marketData);
+  return data;
+}
+
+/**
+ * Update a market (admin only)
+ */
+export async function updateMarket(marketId: number, marketData: MarketUpdate): Promise<Market> {
+  const { data } = await api.patch<Market>(`/admin/markets/${marketId}`, marketData);
+  return data;
+}
+
+/**
+ * Delete a market (admin only)
+ */
+export async function deleteMarket(marketId: number): Promise<void> {
+  await api.delete(`/admin/markets/${marketId}`);
+}
+
+/**
+ * Resolve a market (admin only)
+ */
+export async function resolveMarket(marketId: number, resolveData: MarketResolve): Promise<Market> {
+  const { data } = await api.post<Market>(`/admin/markets/${marketId}/resolve`, resolveData);
+  return data;
+}
+
+// ============================================================
+// Transaction Types & Functions
+// ============================================================
+
+export interface Transaction {
+  id: number;
+  user_id: number;
+  username: string;
+  amount: number;
+  type: string;
+  created_at: string;
+}
+
+export interface TransactionListResponse {
+  transactions: Transaction[];
+  total: number;
+}
+
+export interface TransactionFilters {
+  user_id?: number;
+  type?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Fetch all transactions (admin only)
+ */
+export async function fetchTransactions(filters?: TransactionFilters): Promise<TransactionListResponse> {
+  const params = new URLSearchParams();
+  if (filters?.user_id) params.append("user_id", filters.user_id.toString());
+  if (filters?.type) params.append("type", filters.type);
+  if (filters?.limit) params.append("limit", filters.limit.toString());
+  if (filters?.offset) params.append("offset", filters.offset.toString());
+
+  const { data } = await api.get<TransactionListResponse>(`/admin/transactions?${params.toString()}`);
+  return data;
+}
+
+// ============================================================
+// Position Types & Functions
+// ============================================================
+
+export interface Position {
+  id: number;
+  user_id: number;
+  username: string;
+  market_id: number;
+  market_question: string;
+  shares_yes: number;
+  shares_no: number;
+}
+
+export interface PositionListResponse {
+  positions: Position[];
+  total: number;
+}
+
+export interface PositionFilters {
+  user_id?: number;
+  market_id?: number;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Fetch all positions (admin only)
+ */
+export async function fetchPositions(filters?: PositionFilters): Promise<PositionListResponse> {
+  const params = new URLSearchParams();
+  if (filters?.user_id) params.append("user_id", filters.user_id.toString());
+  if (filters?.market_id) params.append("market_id", filters.market_id.toString());
+  if (filters?.limit) params.append("limit", filters.limit.toString());
+  if (filters?.offset) params.append("offset", filters.offset.toString());
+
+  const { data } = await api.get<PositionListResponse>(`/admin/positions?${params.toString()}`);
+  return data;
+}
+
+// ============================================================
+// Admin Stats Types & Functions
+// ============================================================
+
+export interface AdminStats {
+  total_users: number;
+  total_markets: number;
+  active_markets: number;
+  resolved_markets: number;
+  total_transactions: number;
+  total_volume: number;
+  total_positions: number;
+  recent_transactions: Transaction[];
+}
+
+/**
+ * Fetch admin dashboard stats (admin only)
+ */
+export async function fetchAdminStats(): Promise<AdminStats> {
+  const { data } = await api.get<AdminStats>("/admin/stats");
+  return data;
+}
+
+// ============================================================
+// Export Functions
+// ============================================================
+
+/**
+ * Export users as CSV (admin only)
+ */
+export async function exportUsersCSV(): Promise<void> {
+  const response = await api.get("/admin/export/users", { responseType: "blob" });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", "users_export.csv");
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+/**
+ * Export transactions as CSV (admin only)
+ */
+export async function exportTransactionsCSV(): Promise<void> {
+  const response = await api.get("/admin/export/transactions", { responseType: "blob" });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", "transactions_export.csv");
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export default api;

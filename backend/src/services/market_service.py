@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,6 +57,13 @@ class MarketService:
         Returns:
             The created Market object
         """
+        if initial_pool <= 0:
+            raise ValueError("Initial pool must be greater than 0")
+
+        # Normalize timezone-aware datetime to naive UTC for PostgreSQL
+        if end_date.tzinfo is not None:
+            end_date = end_date.astimezone(timezone.utc).replace(tzinfo=None)
+
         market = Market(
             question=question,
             description=description,
@@ -77,7 +84,7 @@ class MarketService:
     async def get_active_markets(self) -> list[Market]:
         """Get all active (unresolved) markets."""
         result = await self.db.execute(
-            select(Market).where(Market.is_resolved == False).order_by(Market.id.desc())
+            select(Market).where(Market.is_resolved == False).order_by(Market.id.desc())  # noqa: E712
         )
         return list(result.scalars().all())
 
@@ -129,15 +136,17 @@ class MarketService:
             MarketResolvedError: If market is already resolved
             InsufficientBalanceError: If user balance is too low
         """
-        # Get user
-        user_result = await self.db.execute(select(User).where(User.id == user_id))
+        # Get user with lock
+        user_result = await self.db.execute(
+            select(User).where(User.id == user_id).with_for_update()
+        )
         user = user_result.scalar_one_or_none()
         if not user:
             raise UserNotFoundError(f"User with id {user_id} not found")
 
-        # Get market
+        # Get market with lock
         market_result = await self.db.execute(
-            select(Market).where(Market.id == market_id)
+            select(Market).where(Market.id == market_id).with_for_update()
         )
         market = market_result.scalar_one_or_none()
         if not market:
