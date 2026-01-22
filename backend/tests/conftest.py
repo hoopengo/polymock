@@ -7,12 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from src.db.base import Base
 from src.db.session import get_db
 from src.main import app
-from src.models.market import Market
-from src.models.position import Position
-from src.models.transaction import Transaction
 
 # Import models to ensure they are registered with Base.metadata
-from src.models.user import User
 
 # Use in-memory SQLite for tests
 SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
