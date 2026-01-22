@@ -240,3 +240,73 @@ class MarketService:
             )
         )
         return result.scalar_one_or_none()
+
+    async def resolve_market(
+        self,
+        market_id: int,
+        outcome: bool,
+        resolution_source: str | None = None,
+    ) -> Market:
+        """
+        Resolve a market and payout winners.
+
+        Args:
+            market_id: ID of the market to resolve
+            outcome: The winning outcome (True for YES, False for NO)
+            resolution_source: Optional source of the resolution
+
+        Returns:
+            The resolved Market object
+
+        Raises:
+            MarketNotFoundError: If market doesn't exist
+            MarketResolvedError: If market is already resolved
+        """
+        # Get market with lock
+        result = await self.db.execute(
+            select(Market).where(Market.id == market_id).with_for_update()
+        )
+        market = result.scalar_one_or_none()
+
+        if not market:
+            raise MarketNotFoundError(f"Market with id {market_id} not found")
+
+        if market.is_resolved:
+            raise MarketResolvedError(f"Market {market_id} is already resolved")
+
+        # Update market status
+        market.is_resolved = True
+        market.outcome = outcome
+        if resolution_source:
+            market.resolution_source = resolution_source
+
+        # Find winning positions and users
+        stmt = select(Position, User).join(User).where(Position.market_id == market_id)
+
+        if outcome:
+            stmt = stmt.where(Position.shares_yes > 0)
+        else:
+            stmt = stmt.where(Position.shares_no > 0)
+
+        result = await self.db.execute(stmt)
+        rows = result.all()
+
+        for position, user in rows:
+            winning_shares = position.shares_yes if outcome else position.shares_no
+            # Payout is 1:1 for winning shares
+            payout_amount = winning_shares
+
+            if payout_amount > 0:
+                user.balance += payout_amount
+
+                # Create transaction
+                tx = Transaction(
+                    user_id=user.id,
+                    amount=payout_amount,
+                    type=TransactionType.WIN,
+                )
+                self.db.add(tx)
+
+        await self.db.commit()
+        await self.db.refresh(market)
+        return market

@@ -28,7 +28,11 @@ from src.schemas.admin import (
     UserUpdate,
 )
 from src.schemas.market import MarketCreate, MarketResponse
-from src.services.market_service import MarketService
+from src.services.market_service import (
+    MarketNotFoundError,
+    MarketResolvedError,
+    MarketService,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -232,30 +236,25 @@ async def resolve_market(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketResponse:
     """Resolve a market with an outcome (admin only)."""
-    result = await db.execute(select(Market).where(Market.id == market_id))
-    market = result.scalar_one_or_none()
+    service = MarketService(db)
 
-    if not market:
+    try:
+        market = await service.resolve_market(
+            market_id=market_id,
+            outcome=resolve_data.outcome,
+            resolution_source=resolve_data.resolution_source,
+        )
+    except MarketNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Market with id {market_id} not found",
         )
-
-    if market.is_resolved:
+    except MarketResolvedError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Market is already resolved",
         )
 
-    market.is_resolved = True
-    market.outcome = resolve_data.outcome
-    if resolve_data.resolution_source:
-        market.resolution_source = resolve_data.resolution_source
-
-    await db.commit()
-    await db.refresh(market)
-
-    service = MarketService(db)
     return _market_to_response(market, service)
 
 
